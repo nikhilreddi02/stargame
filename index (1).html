@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Starstrike: Nebula Assault 2D</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000000; }
+        canvas { width: 100vw; height: 100vh; display: block; }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #FFFFFF;
+            font-family: Arial, sans-serif;
+            font-size: 28px;
+            text-shadow: 2px 2px 6px #000000;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #FFFFFF;
+            padding: 30px;
+            border-radius: 15px;
+            display: none;
+            font-family: Arial, sans-serif;
+            font-size: 32px;
+            text-align: center;
+            box-shadow: 0 0 20px #FF4500;
+        }
+        #gameOver button {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 22px;
+            background: #FF4500;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #gameOver button:hover {
+            background: #FF6347;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">Score: <span id="score">0</span></div>
+    <canvas id="game"></canvas>
+    <div id="gameOver">
+        Game Over, Bro! Score: <span id="finalScore">0</span><br>
+        <button onclick="restartGame()">Retry</button>
+    </div>
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const uiScore = document.getElementById('score');
+        const gameOver = document.getElementById('gameOver');
+        const finalScore = document.getElementById('finalScore');
+
+        // Set canvas to full screen
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            jet.x = canvas.width / 2;
+            jet.y = canvas.height - 100;
+        });
+
+        // Player (real jet-shaped)
+        let jet = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            width: 50,
+            height: 40,
+            speed: 7,
+            bullets: [],
+            score: 0
+        };
+
+        // Enemies (toggle between spacecraft or aliens)
+        let enemies = [];
+        let spawnTimer = 0;
+        const ENEMY_TYPE = 'spacecraft'; // Change to 'aliens' for purple tentacles
+
+        // Background stars (galaxy effect)
+        let stars = [];
+        for (let i = 0; i < 100; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 4 + 1,
+                speed: Math.random() * 0.5 + 0.1
+            });
+        }
+
+        // Controls (smooth and responsive)
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            e.preventDefault();
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            e.preventDefault();
+        });
+
+        function update() {
+            // Move jet
+            if (keys['ArrowLeft'] && jet.x > 0) jet.x -= jet.speed;
+            if (keys['ArrowRight'] && jet.x < canvas.width - jet.width) jet.x += jet.speed;
+            if (keys['ArrowUp'] && jet.y > 0) jet.y -= jet.speed;
+            if (keys['ArrowDown'] && jet.y < canvas.height - jet.height) jet.y += jet.speed;
+            if (keys['Space'] && jet.bullets.length < 15) {
+                jet.bullets.push({ x: jet.x + jet.width / 2 - 2, y: jet.y - jet.height });
+            }
+
+            // Update bullets
+            jet.bullets = jet.bullets.filter(b => b.y > -10);
+            jet.bullets.forEach(b => b.y -= 10);
+
+            // Spawn enemies
+            spawnTimer++;
+            if (spawnTimer > 20) {
+                enemies.push({
+                    x: Math.random() * (canvas.width - 50),
+                    y: -50,
+                    width: 50,
+                    height: 50,
+                    speed: 3 + Math.random() * 3
+                });
+                spawnTimer = 0;
+            }
+
+            // Move enemies and stars
+            enemies = enemies.filter(e => e.y < canvas.height);
+            enemies.forEach(e => e.y += e.speed);
+
+            stars.forEach(s => s.y += s.speed);
+            stars = stars.filter(s => s.y < canvas.height);
+            if (stars.length < 100) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: -10,
+                    size: Math.random() * 4 + 1,
+                    speed: Math.random() * 0.5 + 0.1
+                });
+            }
+
+            // Collisions (fixed to prevent double scoring)
+            jet.bullets.forEach((b, bi) => {
+                enemies.forEach((e, ei) => {
+                    if (b.x > e.x - 5 && b.x < e.x + e.width + 5 && b.y > e.y && b.y < e.y + e.height) {
+                        enemies.splice(ei, 1);
+                        jet.bullets.splice(bi, 1);
+                        jet.score += 15; // Only add once per hit
+                        uiScore.textContent = jet.score;
+                    }
+                });
+            });
+
+            // Jet collision (game over)
+            enemies.forEach(e => {
+                if (jet.x - jet.width / 2 < e.x + e.width &&
+                    jet.x + jet.width / 2 > e.x &&
+                    jet.y - jet.height / 2 < e.y + e.height &&
+                    jet.y + jet.height / 2 > e.y) {
+                    finalScore.textContent = jet.score;
+                    gameOver.style.display = 'block';
+                    jet.score = 0;
+                    enemies = [];
+                    jet.bullets = [];
+                    jet.x = canvas.width / 2;
+                    jet.y = canvas.height - 100;
+                }
+            });
+        }
+
+        function draw() {
+            // Clear canvas with galaxy effect
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw stars
+            ctx.fillStyle = '#FFFFFF';
+            stars.forEach(s => {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw jet (real jet shape, silver with blue accents)
+            ctx.fillStyle = '#C0C0C0'; // Silver body
+            ctx.beginPath();
+            ctx.moveTo(jet.x, jet.y - jet.height / 2); // Nose
+            ctx.lineTo(jet.x - jet.width / 2, jet.y + jet.height / 2); // Left wing tip
+            ctx.lineTo(jet.x - jet.width / 3, jet.y); // Left body
+            ctx.lineTo(jet.x + jet.width / 3, jet.y); // Right body
+            ctx.lineTo(jet.x + jet.width / 2, jet.y + jet.height / 2); // Right wing tip
+            ctx.fill();
+            ctx.fillStyle = '#00CED1'; // Blue accents
+            ctx.fillRect(jet.x - jet.width / 4, jet.y - 5, jet.width / 2, 5); // Cockpit
+
+            // Draw bullets
+            ctx.fillStyle = '#FF4444';
+            jet.bullets.forEach(b => {
+                ctx.fillRect(b.x, b.y - 5, 4, 10);
+            });
+
+            // Draw enemies (toggle spacecraft or aliens)
+            if (ENEMY_TYPE === 'spacecraft') {
+                // Red spacecraft
+                ctx.fillStyle = '#FF0000';
+                enemies.forEach(e => {
+                    ctx.beginPath();
+                    ctx.moveTo(e.x + e.width / 2, e.y); // Top
+                    ctx.lineTo(e.x, e.y + e.height); // Left bottom
+                    ctx.lineTo(e.x + e.width / 4, e.y + e.height / 2); // Left wing
+                    ctx.lineTo(e.x + 3 * e.width / 4, e.y + e.height / 2); // Right wing
+                    ctx.lineTo(e.x + e.width, e.y + e.height); // Right bottom
+                    ctx.fill();
+                });
+            } else {
+                // Purple aliens
+                ctx.fillStyle = '#800080';
+                enemies.forEach(e => {
+                    ctx.beginPath();
+                    ctx.moveTo(e.x + e.width / 2, e.y); // Center top
+                    ctx.lineTo(e.x, e.y + e.height / 2); // Left tentacle
+                    ctx.lineTo(e.x + e.width / 4, e.y + e.height); // Left bottom
+                    ctx.lineTo(e.x + 3 * e.width / 4, e.y + e.height); // Right bottom
+                    ctx.lineTo(e.x + e.width, e.y + e.height / 2); // Right tentacle
+                    ctx.closePath();
+                    ctx.fill();
+                });
+            }
+
+            // Draw score
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '28px Arial';
+            ctx.fillText(`Score: ${jet.score}`, 20, 50);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function restartGame() {
+            gameOver.style.display = 'none';
+            jet.score = 0;
+            uiScore.textContent = '0';
+            enemies = [];
+            jet.bullets = [];
+            jet.x = canvas.width / 2;
+            jet.y = canvas.height - 100;
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
